@@ -1,8 +1,8 @@
 from time import time
 from collections import Counter
 
-from tools import (
-    to_json, from_json, exists_file,
+from sentence_store.tools import (
+    to_json, from_json, exists_file
 )
 import torch
 from sentence_transformers import SentenceTransformer
@@ -40,7 +40,7 @@ class Embedder:
         t1 = time()
         embeddings = sbert_embed(sents)
         t2 = time()
-        self.times['embed'] = t2 - t1
+        self.times['embed'] += t2 - t1
         return embeddings
 
     def store(self, sents):
@@ -75,18 +75,23 @@ class Embedder:
         """
         fetches the store
         """
+        t1 = time()
         sents = self.load()
         query_embeddings = self.embed([query_sent])
+        t2 = time()
+        self.times['query'] += t2 - t1
         knn_pairs = self.vstore.query_one(query_embeddings[0], k=top_k)
-
         answers = [(sents[i], r) for (i, r) in knn_pairs]
         return answers
 
     def knns(self, top_k, as_weights=True):
         assert top_k > 0, top_k
+        t1 = time()
         self.load()
         assert self.vstore is not None
         knn_pairs = self.vstore.all_knns(k=top_k, as_weights=as_weights)
+        t2 = time()
+        self.times['knns'] += t2 - t1
         return knn_pairs
 
     def get_sents(self):
@@ -117,5 +122,27 @@ def test_main():
     return True
 
 
+def test_big(url='https://www.gutenberg.org/cache/epub/2600/pg2600.txt'):
+    import urllib.request
+    with urllib.request.urlopen(url) as f:
+        text = f.read().decode('utf-8')
+        print('TEXT:', text[0:50], '...')
+        sents = text.split('\n')
+        sents = [s.strip() for s in sents if s.strip()]
+        e = Embedder(cache_name='big_test')
+        print('SENTS:', len(sents))
+        print('COMPUTING AND STORING EMBEDDINGS')
+        e.store(sents)
+        print('DIMS:', e.vstore)
+        print("COMPUTING KNNS for k=3:")
+        print('DONE:',len(e.knns(3)))
+        print('QUERY WITH 3 ANSWERS:')
+        rs = e('What did Napoleon say when he arrived to Moscow?', 3)
+        print('RETRIEVED:', rs)
+        print('\TIMES:\n', e.get_times())
+        return True
+
+
 if __name__ == "__main__":
-    assert test_main()
+    assert test_big()
+    #assert test_main()
