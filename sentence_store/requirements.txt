@@ -1,4 +1,4 @@
 torch
 vecstore
 sentify
-
+sentence_transformers
