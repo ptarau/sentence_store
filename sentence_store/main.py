@@ -43,6 +43,11 @@ class Embedder:
         self.times['embed'] += t2 - t1
         return embeddings
 
+    def clear(self):
+        fj = self.cache('.json')
+        fb = self.cache('.bin')
+
+
     def store(self, sents):
         """
         embeds and caches the sentences and their embeddings
@@ -111,12 +116,30 @@ def test_main():
         "The cat sits on the mat",
         "The phone rings",
         "The rocket explodes",
-        "The cat and the dog sleep"
+        "The cat and the dog sleep",
+        "The cellphone is on the table"
     ]
     e.store(sents)
     q = 'Who sleeps on the mat?'
     rs = e(q, 2)
     for r in rs: print(r)
+
+    print("\nCOMPUTING KNNS for k=3:")
+
+    as_weights = False
+    print('KNNS DONE:', as_weights)
+    rs = e.knns(3, as_weights=as_weights)
+    for i, r in enumerate(rs):
+        print(i, sents[i])
+        for x, v in r:
+            print('    ', x, sents[x], v)
+    print()
+
+    as_weights = True
+    print('KNNS DONE:', as_weights)
+    rs = e.knns(3, as_weights=as_weights)
+    for r in rs: print(r)
+    print()
 
     print('TIMES:', e.times)
     return True
@@ -135,14 +158,16 @@ def test_big(url='https://www.gutenberg.org/cache/epub/2600/pg2600.txt'):
         e.store(sents)
         print('DIMS:', e.vstore)
         print("COMPUTING KNNS for k=3:")
-        print('DONE:',len(e.knns(3)))
+        print('DONE:', len(e.knns(3, as_weights=True)))
         print('QUERY WITH 3 ANSWERS:')
         rs = e('What did Napoleon say when he arrived to Moscow?', 3)
-        print('RETRIEVED:', rs)
-        print('\TIMES:\n', e.get_times())
+        print('RETRIEVED:\n')
+        for r in rs: print(*r)
+        print('\nTIMES:\n')
+        for x in e.get_times().items(): print(x)
         return True
 
 
 if __name__ == "__main__":
-    assert test_big()
-    #assert test_main()
+    # assert test_big()
+    assert test_main()
