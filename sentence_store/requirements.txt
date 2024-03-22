@@ -1,3 +1,4 @@
+torch
 vecstore
 sentify
 
