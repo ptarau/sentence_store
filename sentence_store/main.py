@@ -2,7 +2,7 @@ from time import time
 from collections import Counter
 
 from sentence_store.tools import (
-    to_json, from_json, exists_file
+    to_json, from_json, exists_file,remove_file
 )
 import torch
 from sentence_transformers import SentenceTransformer
@@ -46,6 +46,8 @@ class Embedder:
     def clear(self):
         fj = self.cache('.json')
         fb = self.cache('.bin')
+        remove_file(fj)
+        remove_file(fb)
 
     def store(self, sents):
         """
