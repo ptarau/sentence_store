@@ -47,7 +47,6 @@ class Embedder:
         fj = self.cache('.json')
         fb = self.cache('.bin')
 
-
     def store(self, sents):
         """
         embeds and caches the sentences and their embeddings
@@ -69,6 +68,9 @@ class Embedder:
         self.vstore.save()
 
     def load(self):
+        """
+        fetches the store
+        """
         fj = self.cache('.json')
         fb = self.cache(ending='.bin')
         dim, sents = from_json(fj)
@@ -76,9 +78,9 @@ class Embedder:
         self.vstore.load()
         return sents
 
-    def query(self, query_sent, top_k):
+    def knn_query(self, query_sent, top_k):
         """
-        fetches the store
+        gets knns and answers matching the query
         """
         t1 = time()
         sents = self.load()
@@ -87,6 +89,13 @@ class Embedder:
         self.times['query'] += t2 - t1
         knn_pairs = self.vstore.query_one(query_embeddings[0], k=top_k)
         answers = [(sents[i], r) for (i, r) in knn_pairs]
+        return knn_pairs, answers
+
+    def query(self, query_sent, top_k):
+        """
+        gets sentences matching the query
+        """
+        knn_pairs, answers = self.knn_query(query_sent, top_k)
         return answers
 
     def knns(self, top_k, as_weights=True):
