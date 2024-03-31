@@ -1,8 +1,9 @@
 from time import time
+import os
 from collections import Counter
 
 from sentence_store.tools import (
-    to_json, from_json, exists_file,remove_file
+    to_json, from_json, exists_file, remove_file
 )
 import torch
 from sentence_transformers import SentenceTransformer
@@ -11,12 +12,31 @@ from vecstore.vecstore import VecStore
 
 # SBERT API
 
-def sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2"):
+def seq_sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2"):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = SentenceTransformer(emebedding_model, device=device)
     embeddings = model.encode(sents, show_progress_bar=True)
     return embeddings
 
+
+def par_cpu_sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2"):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = SentenceTransformer(emebedding_model, device=device)
+    if device == 'cuda':
+        return seq_sbert_embed(sents, emebedding_model=emebedding_model)
+    num_cores = max(1, os.cpu_count() // 2 - 2)
+    devices = ['cpu'] * num_cores
+    pool = model.start_multi_process_pool(target_devices=devices)
+    embeddings = model.encode_multi_process(sents,pool)
+    SentenceTransformer.stop_multi_process_pool(pool)
+    return embeddings
+
+
+def sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2",multi_cpu=False):
+    if multi_cpu:
+        return par_cpu_sbert_embed(sents, emebedding_model=emebedding_model)
+    else:
+        return seq_sbert_embed(sents, emebedding_model=emebedding_model)
 
 class Embedder:
     """
@@ -36,9 +56,9 @@ class Embedder:
     def cache(self, ending):
         return self.CACHES + self.cache_name + ending
 
-    def embed(self, sents):
+    def embed(self, sents,multi_cpu=False):
         t1 = time()
-        embeddings = sbert_embed(sents)
+        embeddings = sbert_embed(sents,multi_cpu=multi_cpu)
         t2 = time()
         self.times['embed'] += t2 - t1
         return embeddings
@@ -60,7 +80,7 @@ class Embedder:
             self.load()
             return
 
-        embeddings = self.embed(sents)
+        embeddings = self.embed(sents,multi_cpu=True)
         dim = embeddings.shape[1]
         if self.vstore is None:
             self.vstore = VecStore(fb, dim=dim)
@@ -86,7 +106,7 @@ class Embedder:
         """
         t1 = time()
         sents = self.load()
-        query_embeddings = self.embed([query_sent])
+        query_embeddings = self.embed([query_sent],multi_cpu=False)
         t2 = time()
         self.times['query'] += t2 - t1
         knn_pairs = self.vstore.query_one(query_embeddings[0], k=top_k)
@@ -180,5 +200,5 @@ def test_big(url='https://www.gutenberg.org/cache/epub/2600/pg2600.txt'):
 
 
 if __name__ == "__main__":
-    # assert test_big()
-    assert test_main()
+    assert test_big()
+    #assert test_main()
