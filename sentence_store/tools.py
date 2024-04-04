@@ -19,7 +19,8 @@ def exists_file(fname):
 
 
 def remove_file(fname):
-    return os.remove(fname)
+    if exists_file(fname):
+        os.remove(fname)
 
 
 def remove_dir(dname):

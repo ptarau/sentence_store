@@ -8,6 +8,7 @@ from sentence_store.tools import (
 import torch
 from sentence_transformers import SentenceTransformer
 from vecstore.vecstore import VecStore
+from sentify.main import sentify, Segmenter, sent_cleaner
 
 
 # SBERT API
@@ -27,16 +28,17 @@ def par_cpu_sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2"):
     num_cores = max(1, os.cpu_count() // 2 - 2)
     devices = ['cpu'] * num_cores
     pool = model.start_multi_process_pool(target_devices=devices)
-    embeddings = model.encode_multi_process(sents,pool)
+    embeddings = model.encode_multi_process(sents, pool)
     SentenceTransformer.stop_multi_process_pool(pool)
     return embeddings
 
 
-def sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2",multi_cpu=False):
+def sbert_embed(sents, emebedding_model="all-MiniLM-L6-v2", multi_cpu=False):
     if multi_cpu:
         return par_cpu_sbert_embed(sents, emebedding_model=emebedding_model)
     else:
         return seq_sbert_embed(sents, emebedding_model=emebedding_model)
+
 
 class Embedder:
     """
@@ -56,9 +58,9 @@ class Embedder:
     def cache(self, ending):
         return self.CACHES + self.cache_name + ending
 
-    def embed(self, sents,multi_cpu=False):
+    def embed(self, sents, multi_cpu=False):
         t1 = time()
-        embeddings = sbert_embed(sents,multi_cpu=multi_cpu)
+        embeddings = sbert_embed(sents, multi_cpu=multi_cpu)
         t2 = time()
         self.times['embed'] += t2 - t1
         return embeddings
@@ -69,7 +71,7 @@ class Embedder:
         remove_file(fj)
         remove_file(fb)
 
-    def store(self, sents):
+    def store(self, sents,multi_cpu=False):
         """
         embeds and caches the sentences and their embeddings
         unleass this is already done or force=True
@@ -80,7 +82,7 @@ class Embedder:
             self.load()
             return
 
-        embeddings = self.embed(sents,multi_cpu=True)
+        embeddings = self.embed(sents, multi_cpu=multi_cpu)
         dim = embeddings.shape[1]
         if self.vstore is None:
             self.vstore = VecStore(fb, dim=dim)
@@ -88,6 +90,18 @@ class Embedder:
 
         to_json((dim, sents), fj)
         self.vstore.save()
+
+    def store_doc(self, doc_type, doc_name, clean=True, return_timings=False,multi_cpu=False):
+        store=self.cache('_sents.txt')
+        sents = sentify(doc_type, doc_name, clean=clean, store=None, return_timings=return_timings)
+        self.store(sents,multi_cpu=multi_cpu)
+
+    def store_text(self, text, clean=True, multi_cpu=False):
+        seg = Segmenter()
+        sents = seg.text2sents(text)
+        if clean:
+            sents = sent_cleaner(sents)
+        self.store(sents,multi_cpu=multi_cpu)
 
     def load(self):
         """
@@ -106,7 +120,7 @@ class Embedder:
         """
         t1 = time()
         sents = self.load()
-        query_embeddings = self.embed([query_sent],multi_cpu=False)
+        query_embeddings = self.embed([query_sent], multi_cpu=False)
         t2 = time()
         self.times['query'] += t2 - t1
         knn_pairs = self.vstore.query_one(query_embeddings[0], k=top_k)
@@ -150,7 +164,7 @@ def test_main():
         "The cat and the dog sleep",
         "The cellphone is on the table"
     ]
-    e.store(sents)
+    e.store(sents,multi_cpu=True)
     q = 'Who sleeps on the mat?'
     rs = e(q, 2)
     for r in rs: print(r)
@@ -186,7 +200,7 @@ def test_big(url='https://www.gutenberg.org/cache/epub/2600/pg2600.txt'):
         e = Embedder(cache_name='big_test')
         print('SENTS:', len(sents))
         print('COMPUTING AND STORING EMBEDDINGS')
-        e.store(sents)
+        e.store(sents,multi_cpu=True)
         print('DIMS:', e.vstore)
         print("COMPUTING KNNS for k=3:")
         print('DONE:', len(e.knns(3, as_weights=True)))
@@ -201,4 +215,4 @@ def test_big(url='https://www.gutenberg.org/cache/epub/2600/pg2600.txt'):
 
 if __name__ == "__main__":
     assert test_big()
-    #assert test_main()
+    # assert test_main()
