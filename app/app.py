@@ -36,7 +36,7 @@ def save_uploaded_file():
 
 
 with st.sidebar:
-    st.write('**DocDiver is a DeepLLM application**')
+    st.write('**Sentence Store Test App**')
     doc_type = st.radio('Document type?', ('local pdf or txt file', 'url'), index=0, horizontal=True)
 
     if doc_type == 'local pdf or txt file':
